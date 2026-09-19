@@ -6,12 +6,10 @@ import {
   ChevronDown,
   Clock,
   Compass,
-  FilePlus,
+  FilePlus2,
   Globe,
-  Loader2,
   RefreshCw,
   Search,
-  User,
   X,
 } from 'lucide-react';
 
@@ -25,6 +23,7 @@ interface Props {
   canGoBack: boolean;
   canGoForward: boolean;
   lifecycleState: LifecycleState;
+  isLoading: boolean;
   onOpenSearch: () => void;
   onOpenHistory: () => void;
   onOpenPublish: () => void;
@@ -33,6 +32,14 @@ interface Props {
   onSelectPersona: (persona: UserPersona) => void;
   allAddresses: string[];
 }
+
+const stateBadge = {
+  typed:   { num: '01', label: 'Typed',      bg: 'bg-teal/15',   text: 'text-teal',   border: 'border-teal/40'   },
+  loading: { num: '02', label: 'Loading',    bg: 'bg-yellow/15', text: 'text-yellow', border: 'border-yellow/40' },
+  shown:   { num: '03', label: 'Shown',      bg: 'bg-green/15',  text: 'text-green',  border: 'border-green/40'  },
+  history: { num: '04', label: 'In history', bg: 'bg-peach/15',  text: 'text-peach',  border: 'border-peach/40'  },
+  nowhere: { num: '05', label: 'Nowhere',    bg: 'bg-red/15',    text: 'text-red',    border: 'border-red/40'    },
+};
 
 export const BrowserChrome: React.FC<Props> = ({
   address,
@@ -44,6 +51,7 @@ export const BrowserChrome: React.FC<Props> = ({
   canGoBack,
   canGoForward,
   lifecycleState,
+  isLoading,
   onOpenSearch,
   onOpenHistory,
   onOpenPublish,
@@ -58,20 +66,16 @@ export const BrowserChrome: React.FC<Props> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const personaMenuRef = useRef<HTMLDivElement>(null);
 
-  // Sync input with external address changes
-  useEffect(() => {
-    setInputValue(address);
-  }, [address]);
+  useEffect(() => { setInputValue(address); }, [address]);
 
-  // Click outside listener for persona dropdown
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handler = (e: MouseEvent) => {
       if (personaMenuRef.current && !personaMenuRef.current.contains(e.target as Node)) {
         setShowPersonaMenu(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -83,45 +87,32 @@ export const BrowserChrome: React.FC<Props> = ({
     }
   };
 
-  // Filter auto-suggestions
-  const filteredSuggestions = isFocused && inputValue.trim()
-    ? allAddresses
-        .filter((addr) => addr.toLowerCase().includes(inputValue.toLowerCase()) && addr !== inputValue)
-        .slice(0, 6)
+  const suggestions = isFocused && inputValue.trim().length > 0
+    ? allAddresses.filter(a => a.toLowerCase().includes(inputValue.toLowerCase()) && a !== inputValue).slice(0, 7)
     : [];
 
-  // Lifecycle badge style mapping
-  const getBadgeConfig = () => {
-    switch (lifecycleState) {
-      case 'typed':
-        return { num: '01', label: 'Typed', color: 'bg-teal-100 text-teal-800 border-teal-300' };
-      case 'loading':
-        return { num: '02', label: 'Loading', color: 'bg-amber-100 text-amber-800 border-amber-300' };
-      case 'shown':
-        return { num: '03', label: 'Shown', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
-      case 'history':
-        return { num: '04', label: 'In history', color: 'bg-indigo-100 text-indigo-800 border-indigo-300' };
-      case 'nowhere':
-        return { num: '05', label: 'Nowhere', color: 'bg-rose-100 text-rose-800 border-rose-300' };
-    }
-  };
-
-  const badge = getBadgeConfig();
+  const badge = stateBadge[lifecycleState];
 
   return (
-    <header className="bg-slate-100 border-b border-slate-300 px-3 py-2 flex flex-col space-y-1.5 select-none relative z-30 shadow-2xs">
-      {/* Upper Navigation Bar */}
-      <div className="flex items-center justify-between space-x-2">
-        {/* Navigation Buttons: Back, Forward, Reload, Home */}
-        <div className="flex items-center space-x-1">
+    <header className="bg-crust border-b border-surface0 px-3 py-2.5 select-none relative z-40 shrink-0" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.3)' }}>
+      {/* Loading progress bar */}
+      {isLoading && (
+        <div className="absolute top-0 left-0 right-0 h-[2px] overflow-hidden">
+          <div className="h-full bg-blue loading-bar" />
+        </div>
+      )}
+
+      <div className="flex items-center gap-2">
+        {/* ── Nav Buttons ── */}
+        <div className="flex items-center gap-0.5 shrink-0">
           <button
             onClick={onBack}
             disabled={!canGoBack}
-            title={canGoBack ? 'Back' : 'No previous page'}
-            className={`p-1.5 rounded-lg transition ${
+            title="Back (Alt + ←)"
+            className={`p-1.5 rounded-lg transition-colors ${
               canGoBack
-                ? 'text-slate-700 hover:bg-slate-200 active:bg-slate-300 cursor-pointer'
-                : 'text-slate-300 cursor-not-allowed'
+                ? 'text-subtext1 hover:bg-surface0 hover:text-text active:bg-surface1'
+                : 'text-surface1 cursor-not-allowed'
             }`}
           >
             <ArrowLeft className="w-4 h-4" />
@@ -130,11 +121,11 @@ export const BrowserChrome: React.FC<Props> = ({
           <button
             onClick={onForward}
             disabled={!canGoForward}
-            title={canGoForward ? 'Forward' : 'No forward history'}
-            className={`p-1.5 rounded-lg transition ${
+            title="Forward (Alt + →)"
+            className={`p-1.5 rounded-lg transition-colors ${
               canGoForward
-                ? 'text-slate-700 hover:bg-slate-200 active:bg-slate-300 cursor-pointer'
-                : 'text-slate-300 cursor-not-allowed'
+                ? 'text-subtext1 hover:bg-surface0 hover:text-text active:bg-surface1'
+                : 'text-surface1 cursor-not-allowed'
             }`}
           >
             <ArrowRight className="w-4 h-4" />
@@ -142,178 +133,189 @@ export const BrowserChrome: React.FC<Props> = ({
 
           <button
             onClick={onReload}
-            title="Reload this page"
-            className="p-1.5 text-slate-700 hover:bg-slate-200 active:bg-slate-300 rounded-lg transition"
+            title="Reload (Ctrl + R)"
+            className="p-1.5 rounded-lg text-subtext1 hover:bg-surface0 hover:text-text active:bg-surface1 transition-colors"
           >
-            {lifecycleState === 'loading' ? (
-              <Loader2 className="w-4 h-4 animate-spin text-sky-600" />
-            ) : (
-              <RefreshCw className="w-4 h-4" />
-            )}
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-blue' : ''}`} />
           </button>
 
           <button
             onClick={onHome}
-            title="Go to Welcome Portal (smallweb://welcome)"
-            className="p-1.5 text-slate-700 hover:bg-slate-200 active:bg-slate-300 rounded-lg transition"
+            title="Home (smallweb://welcome)"
+            className="p-1.5 rounded-lg text-subtext1 hover:bg-surface0 hover:text-text active:bg-surface1 transition-colors"
           >
             <Compass className="w-4 h-4" />
           </button>
+
+          <div className="w-px h-4 bg-surface0 mx-1" />
         </div>
 
-        {/* Omnibar / Address Bar with Lifecycle State Badge */}
-        <div className="flex-1 max-w-3xl relative">
-          <form
-            onSubmit={handleSubmit}
-            className={`flex items-center bg-white border rounded-xl px-3 py-1.5 shadow-2xs transition ${
-              isFocused
-                ? 'ring-2 ring-sky-400 border-sky-400 shadow-md'
-                : 'border-slate-300 hover:border-slate-400'
-            }`}
-          >
-            <span className="text-xs font-mono text-slate-400 mr-1.5 select-none flex items-center space-x-1">
-              <Globe className="w-3.5 h-3.5 text-slate-400" />
-              <span>smallweb://</span>
-            </span>
-
-            <input
-              ref={inputRef}
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-              placeholder="Type an address to visit..."
-              className="flex-1 bg-transparent text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-hidden"
-            />
-
-            {inputValue && isFocused && (
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  setInputValue('');
-                  inputRef.current?.focus();
-                }}
-                className="text-slate-400 hover:text-slate-600 mr-2 p-0.5"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            )}
-
-            {/* Current Lifecycle State Badge inside Omnibar */}
+        {/* ── Omnibar ── */}
+        <div className="flex-1 relative min-w-0">
+          <form onSubmit={handleSubmit}>
             <div
-              className={`flex items-center space-x-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold tracking-wide shrink-0 transition-all ${badge.color}`}
+              className={`flex items-center gap-2 bg-mantle rounded-xl px-3 py-1.5 border transition-all ${
+                isFocused
+                  ? 'border-blue/60 ring-2 ring-blue/20'
+                  : 'border-surface0 hover:border-surface1'
+              }`}
             >
-              <span className="font-mono">{badge.num}</span>
-              <span>{badge.label}</span>
+              {/* Protocol prefix */}
+              {!isFocused && (
+                <div className="flex items-center gap-1 shrink-0">
+                  <Globe className="w-3 h-3 text-overlay0" />
+                  <span className="text-[10px] font-mono text-overlay0">smallweb://</span>
+                </div>
+              )}
+
+              {/* Address input */}
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onFocus={() => { setIsFocused(true); inputRef.current?.select(); }}
+                onBlur={() => setTimeout(() => setIsFocused(false), 150)}
+                placeholder={isFocused ? 'Type an address — e.g. welcome, garden/digital-gardening...' : address}
+                className="flex-1 min-w-0 bg-transparent text-[12px] font-mono text-text placeholder-overlay0 focus:outline-none"
+              />
+
+              {/* Clear button */}
+              {isFocused && inputValue && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); setInputValue(''); inputRef.current?.focus(); }}
+                  className="text-overlay0 hover:text-subtext1 shrink-0 p-0.5"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+
+              {/* State badge */}
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold font-mono shrink-0 ${badge.bg} ${badge.text} ${badge.border}`}>
+                {badge.num === '02' && isLoading ? (
+                  <svg className="animate-spin w-2.5 h-2.5" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                ) : null}
+                {badge.num} · {badge.label}
+              </div>
             </div>
           </form>
 
-          {/* Autocomplete Suggestions Dropdown */}
-          {filteredSuggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50">
-              <div className="px-3 py-1 bg-slate-50 border-b border-slate-100 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                Matching Addresses on Small Web
+          {/* ── Autocomplete Suggestions ── */}
+          {suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 bg-crust border border-surface0 rounded-xl shadow-modal overflow-hidden z-50 animate-slide-down">
+              <div className="px-3 py-1.5 border-b border-surface0 flex items-center gap-1.5">
+                <Globe className="w-2.5 h-2.5 text-overlay0" />
+                <span className="text-[9px] font-semibold text-overlay0 uppercase tracking-widest">
+                  Small Web Addresses
+                </span>
               </div>
-              {filteredSuggestions.map((sug) => (
-                <div
+              {suggestions.map((sug) => (
+                <button
                   key={sug}
-                  onMouseDown={() => {
-                    setInputValue(sug);
-                    onNavigate(sug);
-                  }}
-                  className="px-3 py-2 text-xs font-mono text-slate-700 hover:bg-sky-50 hover:text-sky-700 cursor-pointer flex items-center justify-between transition"
+                  type="button"
+                  onMouseDown={() => { setInputValue(sug); onNavigate(sug); }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-surface0 transition-colors group"
                 >
-                  <span>smallweb://{sug}</span>
-                  <span className="text-[10px] text-slate-400 font-sans">Jump ↵</span>
-                </div>
+                  <span className="text-[11px] font-mono text-subtext1 group-hover:text-text truncate">
+                    <span className="text-overlay0">smallweb://</span>{sug}
+                  </span>
+                  <span className="text-[9px] text-overlay0 group-hover:text-blue shrink-0 ml-2">↵ Go</span>
+                </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Action Controls & Persona Picker */}
-        <div className="flex items-center space-x-2">
-          {/* Search Button */}
+        {/* ── Actions ── */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Search */}
           <button
             onClick={onOpenSearch}
-            title="Search Web Body Content"
-            className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-white border border-slate-300 hover:border-sky-400 hover:text-sky-700 rounded-lg text-xs font-medium text-slate-700 shadow-2xs transition"
+            title="Full-text Search (Ctrl + K)"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface0 hover:bg-surface1 text-subtext1 hover:text-text text-[11px] font-medium transition-colors"
           >
-            <Search className="w-3.5 h-3.5 text-slate-500" />
+            <Search className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Search</span>
+            <kbd className="hidden lg:inline text-[9px] text-overlay0 bg-mantle px-1 py-0.5 rounded border border-surface1">⌃K</kbd>
           </button>
 
-          {/* History Button */}
+          {/* History */}
           <button
             onClick={onOpenHistory}
-            title="Open Browsing History"
-            className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-white border border-slate-300 hover:border-indigo-400 hover:text-indigo-700 rounded-lg text-xs font-medium text-slate-700 shadow-2xs transition"
+            title="History (Ctrl + H)"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface0 hover:bg-surface1 text-subtext1 hover:text-text text-[11px] font-medium transition-colors"
           >
-            <Clock className="w-3.5 h-3.5 text-slate-500" />
+            <Clock className="w-3.5 h-3.5" />
             <span className="hidden md:inline">History</span>
+            <kbd className="hidden lg:inline text-[9px] text-overlay0 bg-mantle px-1 py-0.5 rounded border border-surface1">⌃H</kbd>
           </button>
 
-          {/* Publish Button */}
+          {/* Publish */}
           <button
             onClick={onOpenPublish}
-            title="Publish a New Site"
-            className="flex items-center space-x-1.5 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs transition"
+            title="Publish a Site"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green/20 hover:bg-green/30 text-green text-[11px] font-semibold border border-green/30 hover:border-green/50 transition-colors"
           >
-            <FilePlus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Publish</span>
+            <FilePlus2 className="w-3.5 h-3.5" />
+            <span>Publish</span>
           </button>
 
-          {/* Persona Selector (Identity as per specification) */}
+          <div className="w-px h-4 bg-surface0 mx-0.5" />
+
+          {/* Persona Picker */}
           <div className="relative" ref={personaMenuRef}>
             <button
               onClick={() => setShowPersonaMenu(!showPersonaMenu)}
-              className="flex items-center space-x-1.5 px-2 py-1 bg-white border border-slate-300 hover:border-slate-400 rounded-lg text-xs shadow-2xs transition"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface0 hover:bg-surface1 transition-colors"
             >
               <div
-                className="w-4 h-4 rounded-full flex items-center justify-center text-white text-[9px] font-bold"
-                style={{ backgroundColor: currentPersona.avatarColor || '#3b82f6' }}
+                className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0 ring-2 ring-white/10"
+                style={{ backgroundColor: currentPersona.avatarColor }}
               >
                 {currentPersona.username[0]?.toUpperCase()}
               </div>
-              <span className="font-medium text-slate-800 text-xs hidden lg:inline">
+              <span className="text-[11px] font-medium text-subtext1 hidden lg:inline max-w-[80px] truncate">
                 {currentPersona.username}
               </span>
-              <ChevronDown className="w-3 h-3 text-slate-400" />
+              <ChevronDown className={`w-3 h-3 text-overlay0 transition-transform ${showPersonaMenu ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Persona Dropdown Menu */}
             {showPersonaMenu && (
-              <div className="absolute right-0 mt-1.5 w-56 bg-white border border-slate-200 rounded-xl shadow-xl p-1 z-50 animate-in fade-in zoom-in-95">
-                <div className="px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                  Switch Persona (History Identity)
+              <div className="absolute right-0 mt-2 w-60 bg-crust border border-surface0 rounded-2xl shadow-modal overflow-hidden z-50 animate-scale-in">
+                <div className="px-3 py-2.5 border-b border-surface0">
+                  <p className="text-[10px] font-semibold text-overlay0 uppercase tracking-widest">Switch Persona</p>
+                  <p className="text-[10px] text-overlay0 mt-0.5">History belongs to the selected user</p>
                 </div>
-                <div className="py-1 max-h-56 overflow-y-auto space-y-0.5">
+                <div className="py-1.5 max-h-64 overflow-y-auto">
                   {personas.map((p) => {
                     const isSelected = p.username === currentPersona.username;
                     return (
                       <button
                         key={p.username}
-                        onClick={() => {
-                          onSelectPersona(p);
-                          setShowPersonaMenu(false);
-                        }}
-                        className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-lg text-xs text-left transition ${
-                          isSelected ? 'bg-sky-50 text-sky-900 font-semibold' : 'text-slate-700 hover:bg-slate-100'
+                        onClick={() => { onSelectPersona(p); setShowPersonaMenu(false); }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
+                          isSelected ? 'bg-blue/10' : 'hover:bg-surface0'
                         }`}
                       >
                         <div
-                          className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                          style={{ backgroundColor: p.avatarColor }}
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                          style={{ backgroundColor: p.avatarColor, boxShadow: `0 0 0 2px ${p.avatarColor}50` }}
                         >
                           {p.username[0]?.toUpperCase()}
                         </div>
-                        <div className="flex-1 truncate">
-                          <div className="leading-tight">{p.username}</div>
-                          <div className="text-[10px] text-slate-400 font-normal truncate">{p.title}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-[12px] font-semibold truncate ${isSelected ? 'text-blue' : 'text-text'}`}>
+                            {p.username}
+                          </div>
+                          <div className="text-[10px] text-overlay0 truncate">{p.title}</div>
                         </div>
-                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-sky-600" />}
+                        {isSelected && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue shrink-0" />
+                        )}
                       </button>
                     );
                   })}
@@ -326,4 +328,3 @@ export const BrowserChrome: React.FC<Props> = ({
     </header>
   );
 };
-

@@ -20,320 +20,232 @@ import { PublishModal } from '../components/PublishModal';
 import { LifecycleLegend } from '../components/LifecycleLegend';
 
 const DEFAULT_PERSONAS: UserPersona[] = [
-  { username: 'Alice', avatarColor: '#ec4899', title: 'Curious Archivist' },
-  { username: 'Bob', avatarColor: '#3b82f6', title: 'Hypertext Hacker' },
-  { username: 'Charlie', avatarColor: '#10b981', title: 'Digital Botanist' },
-  { username: 'Dana', avatarColor: '#f59e0b', title: 'Webring Navigator' },
-  { username: 'Eve', avatarColor: '#8b5cf6', title: 'Cybernetic Poet' },
+  { username: 'Alice', avatarColor: '#f38ba8', title: 'Curious Archivist' },
+  { username: 'Bob', avatarColor: '#89b4fa', title: 'Hypertext Hacker' },
+  { username: 'Charlie', avatarColor: '#a6e3a1', title: 'Digital Botanist' },
+  { username: 'Dana', avatarColor: '#f9e2af', title: 'Webring Navigator' },
+  { username: 'Eve', avatarColor: '#cba6f7', title: 'Cybernetic Poet' },
 ];
 
 export default function BrowserApp() {
-  // Navigation Stacks (The exact browser history stack machine)
+  // ── Navigation History Stacks ──
   const [backStack, setBackStack] = useState<NavEntry[]>([]);
   const [currentEntry, setCurrentEntry] = useState<NavEntry | null>(null);
   const [forwardStack, setForwardStack] = useState<NavEntry[]>([]);
 
-  // Current Viewport Data
+  // ── Viewport state ──
   const [currentSite, setCurrentSite] = useState<Site | null>(null);
   const [lifecycleState, setLifecycleState] = useState<LifecycleState>('shown');
+  const [isLoading, setIsLoading] = useState(false);
   const [nowhereAddress, setNowhereAddress] = useState<string | null>(null);
 
-  // Identity / Persona
+  // ── Personas ──
   const [personas, setPersonas] = useState<UserPersona[]>(DEFAULT_PERSONAS);
   const [currentPersona, setCurrentPersona] = useState<UserPersona>(DEFAULT_PERSONAS[0]);
 
-  // Modals & Drawers
+  // ── Modals ──
   const [historyOpen, setHistoryOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [initialSearchQuery, setInitialSearchQuery] = useState('');
   const [initialPublishAddress, setInitialPublishAddress] = useState('');
 
-  // Per-person browsing history from database
+  // ── History + addresses ──
   const [dbHistory, setDbHistory] = useState<HistoryItem[]>([]);
-  // Autocomplete addresses
   const [allKnownAddresses, setAllKnownAddresses] = useState<string[]>([]);
 
-  // Load initial personas and site list
+  // ── Boot: load personas and address list from API ──
   useEffect(() => {
-    async function initData() {
+    (async () => {
       try {
         const users = await fetchUsers();
-        if (users && users.length > 0) {
+        if (users?.length > 0) {
           setPersonas(users);
           setCurrentPersona(users[0]);
         }
-      } catch (e) {
-        console.warn('Using default personas:', e);
-      }
+      } catch { /* use defaults */ }
 
       try {
-        const { sites } = await fetchAllSites(250);
+        const { sites } = await fetchAllSites(300);
         setAllKnownAddresses(sites.map((s) => s.address));
-      } catch (e) {
-        console.warn('Failed to load known addresses:', e);
-      }
-    }
-
-    initData();
+      } catch { /* no autocomplete */ }
+    })();
   }, []);
 
-  // Reload history when active persona changes
+  // ── Reload history for the active persona ──
   const reloadHistory = useCallback(async (username: string) => {
     try {
       const items = await fetchUserHistory(username);
       setDbHistory(items);
-    } catch (e) {
-      console.warn('Failed to load history:', e);
-    }
+    } catch { /* silent */ }
   }, []);
 
-  useEffect(() => {
-    reloadHistory(currentPersona.username);
-  }, [currentPersona, reloadHistory]);
+  useEffect(() => { reloadHistory(currentPersona.username); }, [currentPersona, reloadHistory]);
 
-  // The Core Navigation Routine
+  // ── Core Navigation Routine ──
   const navigateToAddress = useCallback(
-    async (rawAddress: string, actionType: 'push' | 'replace' | 'traverse' = 'push', restoreScrollY = 0) => {
-      const targetAddress = rawAddress.trim().replace(/^\/+|\/+$/g, '').toLowerCase();
-      if (!targetAddress) return;
+    async (
+      rawAddress: string,
+      actionType: 'push' | 'replace' | 'traverse' = 'push',
+      restoreScrollY = 0
+    ) => {
+      const target = rawAddress.trim().replace(/^\/+|\/+$/g, '').toLowerCase();
+      if (!target) return;
 
-      // 1. Enter "Typed" state
+      // Typed → Loading
       setLifecycleState('typed');
-
-      // 2. Enter "Loading" state
+      await new Promise(r => setTimeout(r, 80)); // brief "typed" flash
       setLifecycleState('loading');
+      setIsLoading(true);
 
       try {
-        const site = await resolveSite(targetAddress);
+        const site = await resolveSite(target);
 
-        // Check if user has been here before in history
-        const hasBeenHere = dbHistory.some(
-          (h) => h.address.toLowerCase() === targetAddress
-        );
+        // Check if this user has been here before
+        const visited = dbHistory.some(h => h.address.toLowerCase() === target);
 
-        // Update history stacks according to browser stack semantics
+        // Update history stacks
         if (actionType === 'push') {
-          if (currentEntry) {
-            setBackStack((prev) => [...prev, currentEntry]);
-          }
-          // RULE: Navigating to a new address CLEAR/TRUNCATES the forward stack!
-          setForwardStack([]);
-          setCurrentEntry({
-            address: targetAddress,
-            title: site.title,
-            timestamp: Date.now(),
-            scrollY: 0,
-          });
+          if (currentEntry) setBackStack(prev => [...prev, currentEntry]);
+          setForwardStack([]); // TRUNCATE forward stack on new navigation
+          setCurrentEntry({ address: target, title: site.title, timestamp: Date.now(), scrollY: 0 });
         } else if (actionType === 'replace') {
-          setCurrentEntry({
-            address: targetAddress,
-            title: site.title,
-            timestamp: Date.now(),
-            scrollY: restoreScrollY,
-          });
+          setCurrentEntry({ address: target, title: site.title, timestamp: Date.now(), scrollY: restoreScrollY });
         }
+        // 'traverse' keeps stacks as-is (already updated by caller)
 
-        // Set site content & clear nowhere
         setCurrentSite(site);
         setNowhereAddress(null);
+        setLifecycleState(visited ? 'history' : 'shown');
 
-        // 3. Transition to "Shown" or "In History" state
-        setLifecycleState(hasBeenHere ? 'history' : 'shown');
+        // Record visit to DB (fire-and-forget)
+        recordVisit({ userId: currentPersona.username, address: target, title: site.title, scrollY: restoreScrollY })
+          .then(() => reloadHistory(currentPersona.username));
 
-        // Record visit in database for this persona
-        await recordVisit({
-          userId: currentPersona.username,
-          address: targetAddress,
-          title: site.title,
-          scrollY: restoreScrollY,
-        });
-
-        // Refresh per-person history
-        reloadHistory(currentPersona.username);
-      } catch (err: any) {
-        // Address not found -> 05 Nowhere state!
-        console.warn(`Address "${targetAddress}" does not exist on Small Web.`);
-        setNowhereAddress(targetAddress);
+      } catch {
+        // ── State 05: Nowhere ──
+        setNowhereAddress(target);
         setCurrentSite(null);
         setLifecycleState('nowhere');
 
         if (actionType === 'push') {
-          if (currentEntry) {
-            setBackStack((prev) => [...prev, currentEntry]);
-          }
+          if (currentEntry) setBackStack(prev => [...prev, currentEntry]);
           setForwardStack([]);
-          setCurrentEntry({
-            address: targetAddress,
-            title: 'Nowhere (404)',
-            timestamp: Date.now(),
-            scrollY: 0,
-          });
+          setCurrentEntry({ address: target, title: 'Nowhere (404)', timestamp: Date.now(), scrollY: 0 });
         }
+      } finally {
+        setIsLoading(false);
       }
     },
     [currentEntry, dbHistory, currentPersona.username, reloadHistory]
   );
 
-  // Initial load: navigate to "welcome" portal
+  // ── Initial load ──
   useEffect(() => {
     navigateToAddress('welcome', 'replace');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Back Button Navigation
+  // ── Back ──
   const handleGoBack = useCallback(() => {
-    if (backStack.length === 0) return;
-
-    const previousEntry = backStack[backStack.length - 1];
-    const newBackStack = backStack.slice(0, backStack.length - 1);
-
-    if (currentEntry) {
-      setForwardStack((prev) => [currentEntry, ...prev]);
-    }
-
-    setBackStack(newBackStack);
-    setCurrentEntry(previousEntry);
-
-    // "Restore on return": Navigate with restoreScrollY parameter
-    navigateToAddress(previousEntry.address, 'traverse', previousEntry.scrollY || 0);
+    if (!backStack.length) return;
+    const prev = backStack[backStack.length - 1];
+    if (currentEntry) setForwardStack(f => [currentEntry, ...f]);
+    setBackStack(b => b.slice(0, -1));
+    setCurrentEntry(prev);
+    navigateToAddress(prev.address, 'traverse', prev.scrollY || 0);
   }, [backStack, currentEntry, navigateToAddress]);
 
-  // Forward Button Navigation
+  // ── Forward ──
   const handleGoForward = useCallback(() => {
-    if (forwardStack.length === 0) return;
-
-    const nextEntry = forwardStack[0];
-    const newForwardStack = forwardStack.slice(1);
-
-    if (currentEntry) {
-      setBackStack((prev) => [...prev, currentEntry]);
-    }
-
-    setForwardStack(newForwardStack);
-    setCurrentEntry(nextEntry);
-
-    // Restore scroll position
-    navigateToAddress(nextEntry.address, 'traverse', nextEntry.scrollY || 0);
+    if (!forwardStack.length) return;
+    const next = forwardStack[0];
+    if (currentEntry) setBackStack(b => [...b, currentEntry]);
+    setForwardStack(f => f.slice(1));
+    setCurrentEntry(next);
+    navigateToAddress(next.address, 'traverse', next.scrollY || 0);
   }, [forwardStack, currentEntry, navigateToAddress]);
 
-  // Reload Current Page
+  // ── Reload ──
   const handleReload = useCallback(() => {
-    if (currentEntry) {
-      navigateToAddress(currentEntry.address, 'replace', currentEntry.scrollY || 0);
-    }
+    if (currentEntry) navigateToAddress(currentEntry.address, 'replace', currentEntry.scrollY || 0);
   }, [currentEntry, navigateToAddress]);
 
-  // Home Button
-  const handleHome = useCallback(() => {
-    navigateToAddress('welcome', 'push');
-  }, [navigateToAddress]);
+  // ── Scroll tracking (Restore on Return) ──
+  const handleScrollChanged = useCallback((scrollY: number) => {
+    if (currentEntry) {
+      currentEntry.scrollY = scrollY;
+      updateScrollOffset(currentPersona.username, currentEntry.address, scrollY);
+    }
+  }, [currentEntry, currentPersona.username]);
 
-  // Track scrolling inside viewport for "Restore on Return"
-  const handleScrollChanged = useCallback(
-    (scrollY: number) => {
-      if (currentEntry) {
-        currentEntry.scrollY = scrollY;
-        updateScrollOffset(currentPersona.username, currentEntry.address, scrollY);
-      }
-    },
-    [currentEntry, currentPersona.username]
-  );
-
-  // Clear History
+  // ── Clear History ──
   const handleClearHistory = async () => {
     await clearHistory(currentPersona.username);
     setDbHistory([]);
   };
 
-  // Keyboard Shortcuts
+  // ── Keyboard Shortcuts ──
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+K for search
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setSearchOpen(true);
-      }
-      // Ctrl+H for history
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') {
-        e.preventDefault();
-        setHistoryOpen(true);
-      }
-      // Alt+Left for back
-      if (e.altKey && e.key === 'ArrowLeft') {
-        e.preventDefault();
-        handleGoBack();
-      }
-      // Alt+Right for forward
-      if (e.altKey && e.key === 'ArrowRight') {
-        e.preventDefault();
-        handleGoForward();
-      }
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearchOpen(true); }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'h') { e.preventDefault(); setHistoryOpen(true); }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') { e.preventDefault(); setPublishOpen(true); }
+      if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); handleGoBack(); }
+      if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); handleGoForward(); }
     };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [handleGoBack, handleGoForward]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-900">
-      {/* 1. The Browser Chrome (Controls, Omnibar, State Pill, Persona Picker) */}
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-base">
+      {/* ① Browser Chrome — Address bar, nav buttons, state badge, persona picker */}
       <BrowserChrome
         address={currentEntry?.address || ''}
         onNavigate={(addr) => navigateToAddress(addr, 'push')}
         onBack={handleGoBack}
         onForward={handleGoForward}
         onReload={handleReload}
-        onHome={handleHome}
+        onHome={() => navigateToAddress('welcome', 'push')}
         canGoBack={backStack.length > 0}
         canGoForward={forwardStack.length > 0}
         lifecycleState={lifecycleState}
-        onOpenSearch={() => setSearchOpen(true)}
+        isLoading={isLoading}
+        onOpenSearch={() => { setInitialSearchQuery(''); setSearchOpen(true); }}
         onOpenHistory={() => setHistoryOpen(true)}
-        onOpenPublish={() => {
-          setInitialPublishAddress('');
-          setPublishOpen(true);
-        }}
+        onOpenPublish={() => { setInitialPublishAddress(''); setPublishOpen(true); }}
         personas={personas}
         currentPersona={currentPersona}
-        onSelectPersona={(persona) => {
-          setCurrentPersona(persona);
-          // Switch history view
-          reloadHistory(persona.username);
-        }}
+        onSelectPersona={(p) => { setCurrentPersona(p); reloadHistory(p.username); }}
         allAddresses={allKnownAddresses}
       />
 
-      {/* 2. Visual Lifecycle States Legend (Displays States 01 to 05) */}
+      {/* ② Visual Lifecycle Legend — States 01 to 05 */}
       <LifecycleLegend currentState={lifecycleState} />
 
-      {/* 3. The Browser Viewport */}
-      <main className="flex-1 w-full relative bg-slate-100 flex flex-col overflow-hidden">
+      {/* ③ Main Viewport */}
+      <main className="flex-1 relative overflow-hidden flex flex-col">
         {lifecycleState === 'nowhere' ? (
           <NowhereView
-            address={nowhereAddress || currentEntry?.address || 'unknown'}
+            address={nowhereAddress || currentEntry?.address || ''}
             onGoBack={handleGoBack}
-            onGoHome={handleHome}
-            onOpenSearch={(term) => {
-              setInitialSearchQuery(term || '');
-              setSearchOpen(true);
-            }}
-            onPublishAddress={(addr) => {
-              setInitialPublishAddress(addr);
-              setPublishOpen(true);
-            }}
+            onGoHome={() => navigateToAddress('welcome', 'push')}
+            onOpenSearch={(term) => { setInitialSearchQuery(term || ''); setSearchOpen(true); }}
+            onPublishAddress={(addr) => { setInitialPublishAddress(addr); setPublishOpen(true); }}
+            canGoBack={backStack.length > 0}
           />
         ) : (
           <BrowserViewport
             site={currentSite}
             targetScrollY={currentEntry?.scrollY || 0}
-            onNavigate={(target) => navigateToAddress(target, 'push')}
+            onNavigate={(addr) => navigateToAddress(addr, 'push')}
             onScrollChanged={handleScrollChanged}
           />
         )}
       </main>
 
-      {/* 4. Modals & Drawers */}
+      {/* ④ Modals & Drawers */}
       <HistoryDrawer
         isOpen={historyOpen}
         onClose={() => setHistoryOpen(false)}
@@ -354,7 +266,7 @@ export default function BrowserApp() {
         isOpen={publishOpen}
         onClose={() => setPublishOpen(false)}
         onPublished={(addr) => {
-          setAllKnownAddresses((prev) => (prev.includes(addr) ? prev : [...prev, addr]));
+          setAllKnownAddresses(prev => prev.includes(addr) ? prev : [...prev, addr]);
           navigateToAddress(addr, 'push');
         }}
         currentPersona={currentPersona}

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SearchResultItem } from '../types/browser';
 import { searchSites } from '../lib/api';
-import { ArrowRight, Loader2, Search, X } from 'lucide-react';
+import { ArrowRight, Search, X } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -21,141 +21,184 @@ export const SearchModal: React.FC<Props> = ({
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     if (isOpen) {
       setQuery(initialQuery);
+      setResults([]);
+      setSearched(false);
       setTimeout(() => inputRef.current?.focus(), 50);
-      if (initialQuery.trim()) {
-        executeSearch(initialQuery);
-      }
+      if (initialQuery.trim()) performSearch(initialQuery);
     }
   }, [isOpen, initialQuery]);
 
-  const executeSearch = async (searchTerm: string) => {
-    if (!searchTerm.trim()) return;
+  // Debounced live search
+  useEffect(() => {
+    if (!isOpen) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!query.trim()) { setResults([]); setSearched(false); setLoading(false); return; }
+    debounceRef.current = setTimeout(() => performSearch(query), 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [query, isOpen]);
+
+  const performSearch = async (term: string) => {
+    if (!term.trim()) return;
     setLoading(true);
     setSearched(true);
     try {
-      const data = await searchSites(searchTerm);
+      const data = await searchSites(term);
       setResults(data.results);
-    } catch (err) {
-      console.error('Search error:', err);
+    } catch {
       setResults([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    executeSearch(query);
-  };
+  // Close on Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
+  const highlightText = (text: string, term: string) => {
+    if (!term.trim()) return text;
+    const regex = new RegExp(`(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(regex, '<mark class="bg-yellow/30 text-text rounded-sm px-0.5">$1</mark>');
+  };
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto flex items-start justify-center pt-16 px-4 bg-black/40 backdrop-blur-xs transition-opacity animate-in fade-in">
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[80vh]">
-        {/* Search Input Bar */}
-        <form onSubmit={handleSubmit} className="p-4 border-b border-slate-100 flex items-center space-x-3 bg-slate-50/70">
-          <Search className="w-5 h-5 text-sky-600 shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search across all pages by words written inside them..."
-            className="flex-1 bg-transparent border-none text-slate-800 placeholder-slate-400 text-sm focus:outline-hidden font-medium"
-          />
-          {loading ? (
-            <Loader2 className="w-4 h-4 text-sky-600 animate-spin shrink-0" />
-          ) : query ? (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm animate-fade-in"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-full max-w-2xl px-4 animate-scale-in">
+        <div className="bg-crust border border-surface0 rounded-2xl shadow-modal overflow-hidden" style={{ maxHeight: 'calc(100vh - 10rem)' }}>
+          {/* Search Input */}
+          <div className="flex items-center gap-3 px-4 py-3.5 border-b border-surface0 bg-mantle">
+            {loading ? (
+              <svg className="animate-spin w-4 h-4 text-blue shrink-0" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+            ) : (
+              <Search className="w-4 h-4 text-overlay0 shrink-0" />
+            )}
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search pages by what is written inside them..."
+              className="flex-1 bg-transparent text-sm text-text placeholder-overlay0 focus:outline-none"
+            />
+            {query && (
+              <button
+                onClick={() => { setQuery(''); setResults([]); setSearched(false); inputRef.current?.focus(); }}
+                className="text-overlay0 hover:text-subtext1 p-0.5 shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
             <button
-              type="button"
-              onClick={() => {
-                setQuery('');
-                setResults([]);
-                setSearched(false);
-                inputRef.current?.focus();
-              }}
-              className="text-slate-400 hover:text-slate-600 p-1"
+              onClick={onClose}
+              className="text-[10px] font-semibold text-overlay0 bg-surface0 hover:bg-surface1 px-2 py-1 rounded-md border border-surface1 shrink-0 transition-colors"
             >
-              <X className="w-4 h-4" />
+              ESC
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-2.5 py-1 text-xs font-semibold text-slate-500 bg-slate-200/80 hover:bg-slate-300 rounded-md transition"
-          >
-            ESC
-          </button>
-        </form>
-
-        {/* Search Results List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-          {!searched && !loading && (
-            <div className="py-12 text-center text-slate-400">
-              <Search className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm font-medium text-slate-600">Full-Text Hypertext Search</p>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Type any keyword, phrase, or topic to search through the HTML body of every site stored in the database.
-              </p>
-            </div>
-          )}
-
-          {searched && results.length === 0 && !loading && (
-            <div className="py-12 text-center text-slate-400">
-              <p className="text-sm font-semibold text-slate-700">No pages matched "{query}"</p>
-              <p className="text-xs text-slate-400 mt-1">
-                Try searching for words like "hypertext", "sourdough", "arcade", "manifesto", or "alice".
-              </p>
-            </div>
-          )}
-
-          {results.map((res) => (
-            <div
-              key={res.address}
-              onClick={() => {
-                onSelectResult(res.address);
-                onClose();
-              }}
-              className="group p-3.5 rounded-xl border border-slate-100 hover:border-sky-300 bg-white hover:bg-sky-50/50 transition cursor-pointer flex flex-col space-y-1 shadow-2xs hover:shadow-xs"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-sm text-slate-900 group-hover:text-sky-700 transition-colors truncate">
-                  {res.title || res.address}
-                </span>
-                <span className="text-xs font-mono text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100 shrink-0 ml-2">
-                  smallweb://{res.address}
-                </span>
-              </div>
-
-              <p className="text-xs text-slate-500 leading-relaxed line-clamp-2">
-                {res.snippet}
-              </p>
-
-              <div className="flex items-center justify-between pt-1 text-[11px] text-slate-400">
-                <span>Author: <strong className="text-slate-600 font-normal">{res.author}</strong></span>
-                <span className="flex items-center space-x-1 text-sky-600 opacity-0 group-hover:opacity-100 transition-opacity font-medium">
-                  <span>Visit site</span>
-                  <ArrowRight className="w-3 h-3" />
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Footer */}
-        {results.length > 0 && (
-          <div className="p-3 bg-slate-50 border-t border-slate-100 text-xs text-slate-500 flex justify-between items-center px-4">
-            <span>Found {results.length} matching {results.length === 1 ? 'page' : 'pages'}</span>
-            <span className="text-[11px] text-slate-400">MongoDB text indexing</span>
           </div>
-        )}
+
+          {/* Results */}
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
+            {!searched && !loading && (
+              <div className="flex flex-col items-center justify-center py-14 text-center px-6">
+                <div className="w-14 h-14 rounded-2xl bg-surface0 flex items-center justify-center mb-4">
+                  <Search className="w-6 h-6 text-overlay0" />
+                </div>
+                <p className="text-sm font-semibold text-subtext1">Full-Text Hypertext Search</p>
+                <p className="text-xs text-overlay0 mt-1.5 max-w-xs leading-relaxed">
+                  Search inside the HTML body of every page — not just titles.
+                  Try "sourdough", "hypertext", "arcade", or "manifesto".
+                </p>
+              </div>
+            )}
+
+            {searched && results.length === 0 && !loading && (
+              <div className="flex flex-col items-center justify-center py-14 text-center px-6">
+                <p className="text-sm font-semibold text-subtext1">No matches for "{query}"</p>
+                <p className="text-xs text-overlay0 mt-1.5">
+                  Try different keywords or publish a page containing this topic.
+                </p>
+              </div>
+            )}
+
+            {results.length > 0 && (
+              <div className="divide-y divide-surface0/40 py-1">
+                {results.map((result) => (
+                  <button
+                    key={result.address}
+                    onClick={() => { onSelectResult(result.address); onClose(); }}
+                    className="w-full flex items-start gap-3 px-4 py-3.5 text-left hover:bg-surface0/60 group transition-colors"
+                  >
+                    {/* Icon */}
+                    <div className="w-8 h-8 rounded-lg bg-surface0 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-blue/10 group-hover:border group-hover:border-blue/20 transition-all">
+                      <span className="text-[10px] font-mono font-bold text-overlay0 group-hover:text-blue">W</span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      {/* Title & Address */}
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span
+                          className="text-[13px] font-semibold text-text group-hover:text-blue truncate transition-colors"
+                          dangerouslySetInnerHTML={{ __html: highlightText(result.title || result.address, query) }}
+                        />
+                        <span className="text-[10px] font-mono text-overlay0 bg-surface0 px-2 py-0.5 rounded-md shrink-0">
+                          {result.address}
+                        </span>
+                      </div>
+
+                      {/* Snippet */}
+                      <p
+                        className="text-[11px] text-overlay1 leading-relaxed line-clamp-2"
+                        dangerouslySetInnerHTML={{ __html: highlightText(result.snippet, query) }}
+                      />
+
+                      {/* Meta */}
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span className="text-[10px] text-overlay0">
+                          By <span className="text-subtext0">{result.author}</span>
+                        </span>
+                        <span className="flex items-center gap-1 text-[10px] text-blue opacity-0 group-hover:opacity-100 transition-opacity">
+                          Visit <ArrowRight className="w-2.5 h-2.5" />
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          {results.length > 0 && (
+            <div className="flex items-center justify-between px-4 py-2.5 border-t border-surface0 bg-mantle">
+              <span className="text-[10px] text-overlay0">
+                {results.length} result{results.length !== 1 ? 's' : ''} found
+              </span>
+              <span className="text-[10px] text-overlay0">MongoDB full-text index · Body content search</span>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
-
