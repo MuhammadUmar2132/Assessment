@@ -17,3 +17,4 @@ export class CreateHistoryDto {
   @IsNumber()
   scrollY?: number;
 }
+

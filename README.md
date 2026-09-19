@@ -25,3 +25,4 @@ npm run seed
 # 3. Start development servers (NestJS on :3001, Next.js on :3000)
 npm run dev
 ```
+

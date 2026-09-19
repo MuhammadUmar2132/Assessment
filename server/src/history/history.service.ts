@@ -43,3 +43,4 @@ export class HistoryService {
     await this.historyModel.deleteMany({ userId }).exec();
   }
 }
+

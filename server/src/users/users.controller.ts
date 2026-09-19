@@ -15,3 +15,4 @@ export class UsersController {
     return this.usersService.create(body.username, body.avatarColor, body.title);
   }
 }
+

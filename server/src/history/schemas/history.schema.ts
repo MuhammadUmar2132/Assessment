@@ -23,3 +23,4 @@ export class HistoryEntry {
 
 export const HistorySchema = SchemaFactory.createForClass(HistoryEntry);
 HistorySchema.index({ userId: 1, visitedAt: -1 });
+

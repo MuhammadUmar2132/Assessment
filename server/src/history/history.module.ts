@@ -13,3 +13,4 @@ import { HistoryController } from './history.controller';
   exports: [HistoryService],
 })
 export class HistoryModule {}
+

@@ -117,3 +117,4 @@ In `client/components/BrowserViewport.tsx`:
 - `GET http://localhost:3000` returns status **200 OK**.
 - Verified Back/Forward stack manipulation and forward history truncation upon new navigation.
 - Verified persona switching isolates history per user.
+

@@ -24,3 +24,4 @@ async function bootstrap() {
   console.log(`🚀 Small Web NestJS Server is running on http://localhost:${port}`);
 }
 bootstrap();
+

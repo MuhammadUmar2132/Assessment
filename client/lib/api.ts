@@ -93,3 +93,4 @@ export async function fetchAllSites(limit = 100): Promise<{ sites: Site[]; total
   if (!res.ok) return { sites: [], total: 0 };
   return res.json();
 }
+

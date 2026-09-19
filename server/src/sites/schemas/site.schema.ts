@@ -44,3 +44,4 @@ SiteSchema.index({
   },
   name: 'SiteTextIndex'
 });
+

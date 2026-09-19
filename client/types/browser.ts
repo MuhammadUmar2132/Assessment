@@ -41,3 +41,4 @@ export interface SearchResultItem {
   snippet: string;
   updatedAt: string;
 }
+

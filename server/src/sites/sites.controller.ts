@@ -26,3 +26,4 @@ export class SitesController {
     return this.sitesService.publish(createSiteDto);
   }
 }
+

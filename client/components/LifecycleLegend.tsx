@@ -95,3 +95,4 @@ export const LifecycleLegend: React.FC<Props> = ({ currentState }) => {
     </div>
   );
 };
+
